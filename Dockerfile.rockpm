@@ -1,0 +1,24 @@
+FROM openjdk:8
+#--------------------------------------------------------------------------#
+#--------------------------------------------------------------------------#
+#                      R O C K P M Ver 1.0.0 I M A G E                     #
+#--------------------------------------------------------------------------#
+#--------------------------------------------------------------------------#   
+LABEL maintainer="mwsong@rockplace.co.kr"
+ 
+ENV ROCKPM_HOME=/opt/rockPM
+
+COPY rockPM.tar.gz /opt/
+
+RUN cd /opt && tar -zxvf rockPM.tar.gz && rm -f rockPM.tar.gz \ 
+    && useradd -u 1001 -r -g 0 -d ${ROCKPM_HOME} -s /sbin/nologin -c "Default User" rockpm \ 
+    && chown -R 1001:0 ${ROCKPM_HOME} \
+    && chmod 775 -R ${ROCKPM_HOME} 
+
+WORKDIR ${ROCKPM_HOME}
+
+EXPOSE 8080/TCP 
+  
+USER 1001
+
+ENTRYPOINT ["java","-jar","rockPM-web-1.0.0.jar"] 

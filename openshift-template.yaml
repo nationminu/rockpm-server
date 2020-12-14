@@ -1,0 +1,285 @@
+---
+apiVersion: v1
+kind: Template
+metadata:
+  creationTimestamp: null
+  name: rockpm
+objects:
+- apiVersion: v1
+  kind: ImageStream
+  metadata:
+    labels:
+      app: ${APP_NAME}
+    name: ${APP_NAME}
+  spec:
+    tags:
+    - annotations:
+        openshift.io/imported-from: nationminu/rockpm-server:latest
+      from:
+        kind: DockerImage
+        name: docker.io/nationminu/rockpm-server:latest
+      importPolicy: {}
+      name: latest
+      referencePolicy:
+        type: Source
+  status:
+    dockerImageRepository: ""
+- apiVersion: v1
+  kind: ImageStream
+  metadata:
+    labels:
+      app: ${APP_NAME}
+    name: ${APM_NAME}
+  spec:
+    tags:
+    - annotations:
+        openshift.io/imported-from: nationminu/scouter-server:latest
+      from:
+        kind: DockerImage
+        name: docker.io/nationminu/scouter-server:latest
+      importPolicy: {}
+      name: latest
+      referencePolicy:
+        type: Source
+  status:
+    dockerImageRepository: ""    
+- apiVersion: v1
+  kind: Service
+  metadata:
+    labels:
+      app: ${APP_NAME}
+    name: ${APP_NAME}
+  spec:
+    ports:
+    - name: 8080-http
+      port: 8080
+      protocol: TCP
+      targetPort: 8080 
+    selector:
+      app: ${APP_NAME}
+      deploymentconfig: ${APP_NAME}
+    sessionAffinity: None
+    type: ClusterIP 
+- apiVersion: v1
+  kind: Service
+  metadata:
+    labels:
+      app: ${APP_NAME}
+    name: ${APM_NAME}
+  spec:
+    ports: 
+    - name: 6180-http
+      port: 6180
+      protocol: TCP
+      targetPort: 6180
+    - name: 6100-tcp
+      port: 6100
+      protocol: TCP
+      targetPort: 6100
+    - name: 6100-udp
+      port: 6100
+      protocol: UDP
+      targetPort: 6100
+    selector:
+      app: ${APP_NAME}
+      deploymentconfig: ${APM_NAME}
+    sessionAffinity: None
+    type: ClusterIP
+    
+- apiVersion: v1
+  id: ${APP_NAME}-server
+  kind: Route
+  metadata:
+    annotations:
+      description: Route for application's rockpm http service.
+    labels:
+      application: ${APP_NAME}
+    name: ${APP_NAME}
+  spec:
+    host: ${ROCKPM_HTTP}
+    port:
+      targetPort: 8080-http
+    to:
+      name: ${APP_NAME}
+      
+- apiVersion: v1
+  id: ${APM_NAME}
+  kind: Route
+  metadata:
+    annotations:
+      description: Route for application's scouter service.
+    labels:
+      application: ${APP_NAME}
+    name: ${APM_NAME}
+  spec:
+    host: ${SCOUTER_HTTP}
+    port:
+      targetPort: 6180-http
+    to:
+      name: ${APM_NAME}
+
+- apiVersion: v1
+  kind: PersistentVolumeClaim
+  metadata:
+    name: ${APM_NAME}-pv
+  spec:
+    accessModes:
+    - ReadWriteOnce
+    resources:
+      requests:
+        storage: ${VOLUME_CAPACITY}
+
+- apiVersion: v1
+  kind: DeploymentConfig
+  metadata:
+    annotations:
+      openshift.io/generated-by: OpenShiftNewApp
+    labels:
+      app: ${APP_NAME}
+    name: ${APP_NAME}
+  spec:
+    replicas: 1
+    selector:
+      app: ${APP_NAME}
+      deploymentconfig: ${APP_NAME}
+    strategy:
+      activeDeadlineSeconds: 21600
+      resources: {}
+      rollingParams:
+        intervalSeconds: 1
+        maxSurge: 25%
+        maxUnavailable: 25%
+        timeoutSeconds: 600
+        updatePeriodSeconds: 1
+      type: Rolling
+    template:
+      metadata:
+        annotations:
+          openshift.io/generated-by: OpenShiftNewApp
+        creationTimestamp: null
+        labels:
+          app: ${APP_NAME}
+          deploymentconfig: ${APP_NAME}
+      spec:
+        containers:
+        - env:
+          - name: JAVA_TOOL_OPTIONS
+            value: -Xmx1024m 
+          image: "${APP_NAME}"
+          imagePullPolicy: Always
+          name: "${APP_NAME}"
+          ports:
+          - containerPort: 8080
+            protocol: TCP 
+          resources: {}
+          terminationMessagePath: /dev/termination-log
+        dnsPolicy: ClusterFirst
+        restartPolicy: Always
+        securityContext: {}
+        terminationGracePeriodSeconds: 30
+    test: false
+    triggers:
+    - type: ConfigChange
+    - imageChangeParams:
+        automatic: true
+        containerNames:
+        - ${APP_NAME}
+        from:
+          kind: ImageStreamTag
+          name: ${APP_NAME}:latest
+      type: ImageChange
+
+
+- apiVersion: v1
+  kind: DeploymentConfig
+  metadata:
+    annotations:
+      openshift.io/generated-by: OpenShiftNewApp
+    labels:
+      app: ${APP_NAME}
+    name: ${APM_NAME}
+  spec:   
+    replicas: 1
+    selector:
+      app: ${APP_NAME}
+      deploymentconfig: ${APM_NAME}
+    strategy:
+      activeDeadlineSeconds: 21600
+      resources: {}
+      rollingParams:
+        intervalSeconds: 1
+        maxSurge: 25%
+        maxUnavailable: 25%
+        timeoutSeconds: 600
+        updatePeriodSeconds: 1
+      type: Rolling
+    template:
+      metadata:
+        annotations:
+          openshift.io/generated-by: OpenShiftNewApp
+        creationTimestamp: null
+        labels:
+          app: ${APP_NAME}
+          deploymentconfig: ${APM_NAME} 
+      spec:
+        containers:
+        - env:
+          - name: JAVA_TOOL_OPTIONS
+            value: -Xmx1024m 
+          image: "${APM_NAME}"
+          imagePullPolicy: Always
+          name: "${APM_NAME}"
+          ports:
+          - containerPort: 8080
+            protocol: TCP
+          - containerPort: 6180
+            protocol: TCP
+          - containerPort: 6100
+            protocol: TCP
+          - containerPort: 6100
+            protocol: UDP
+          resources: {}
+          terminationMessagePath: /dev/termination-log
+          volumeMounts:
+          - name: scouter-database-volume
+            mountPath: /opt/scouter/server/database 
+        volumes:
+        - name: scouter-database-volume
+          persistentVolumeClaim:
+            claimName: ${APM_NAME}-pv 
+        dnsPolicy: ClusterFirst
+        restartPolicy: Always
+        securityContext: {}
+        terminationGracePeriodSeconds: 30
+    test: false
+    triggers:
+    - type: ConfigChange
+    - imageChangeParams:
+        automatic: true
+        containerNames:
+        - ${APM_NAME}
+        from:
+          kind: ImageStreamTag
+          name: ${APM_NAME}:latest
+      type: ImageChange
+
+parameters:
+- description: The name assigned to the application.
+  displayName: Application Name
+  name: APP_NAME
+  value: rockpm-server
+- description: The name assigned to the APM application.
+  displayName: Scouter APM Name
+  name: APM_NAME
+  value: scouter-server
+- description: 'Custom hostname for http service route.  Leave blank for default hostname, e.g.: <application-name>-<project>.<default-domain-suffix>'
+  displayName: Custom http Route Hostname
+  name: ROCKPM_HTTP 
+- description: 'Custom hostname for agent service route.  Leave blank for default hostname, e.g.: <application-name>-<project>.<default-domain-suffix>'
+  displayName: Custom agent Route Hostname
+  name: SCOUTER_HTTP
+- description: Volume space available for data, e.g. 512Mi, 2Gi.
+  displayName: Volume Capacity
+  name: VOLUME_CAPACITY
+  required: true
+  value: 10Gi  

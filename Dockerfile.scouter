@@ -1,0 +1,33 @@
+FROM openjdk:8
+#--------------------------------------------------------------------------#
+#--------------------------------------------------------------------------#
+#                   S C O U T E R Ver 2.7.1  I M A G E                     #
+#--------------------------------------------------------------------------#
+#--------------------------------------------------------------------------#   
+LABEL maintainer="mwsong@rockplace.co.kr"
+ 
+ENV SCOUTER_HOME=/opt/scouter/server 
+
+ADD https://github.com/scouter-project/scouter/releases/download/v2.7.1/scouter-all-2.7.1.tar.gz /opt/
+COPY entrypoint.sh ${SCOUTER_HOME}/entrypoint.sh 
+   
+RUN cd /opt && tar -zxf scouter-*.tar.gz && rm -f scouter-*.tar.gz \ 
+    && echo "net_http_server_enabled=true" > ${SCOUTER_HOME}/conf/scouter.conf \
+    && echo "net_http_api_enabled=true" >> ${SCOUTER_HOME}/conf/scouter.conf \
+    && echo "net_http_port=6180" >> ${SCOUTER_HOME}/conf/scouter.conf \
+    && echo "net_tcp_listen_port=6100" >> ${SCOUTER_HOME}/conf/scouter.conf \
+    && echo "net_udp_listen_port=6100" >> ${SCOUTER_HOME}/conf/scouter.conf \
+    && chmod +x ${SCOUTER_HOME}/entrypoint.sh \
+    && useradd -u 1001 -r -g 0 -d ${SCOUTER_HOME} -s /sbin/nologin -c "Default User" scouter \  
+    && chown -R 1001:0 ${SCOUTER_HOME} \
+    && chmod 775 -R ${SCOUTER_HOME} 
+
+WORKDIR $SCOUTER_HOME 
+
+EXPOSE 6100/TCP
+EXPOSE 6100/UDP
+EXPOSE 6180/TCP 
+  
+USER 1001
+  
+ENTRYPOINT ["/opt/scouter/server/entrypoint.sh"] 
