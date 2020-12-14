@@ -21,21 +21,29 @@ docker push docker.io/nationminu/rockpm-server:latest
 
 ## rockPM & Scouter Server Using Openshift
 ```
-oc new-app -f openjdk-spring-boot-template.yaml
+oc new-app -f openshift-rockpm-template.yaml
 ```
 
 ## Sample Spring-boot Using scouter-agent
-Sample Demo
+EDIT Demo Application 
 ```
 $ git clone https://github.com/nationminu/demo.git 
 $ vi demo/rockpm/scouter.conf
 
-## EDIT IT : {service_name}.{project_name}.svc.cluster.local 
+## EDIT Scouter Server : {service_name}.{project_name}.svc.cluster.local 
 net_collector_ip=scouter-server.rockpm.svc.cluster.local 
 net_collector_udp_port=6100
 net_collector_tcp_port=6100
 ```
 
 ```
-oc new-app -f openshift-template.yaml
+$ vi openjdk-spring-boot-template.yaml
+      spec:
+        containers:
+        - env:
+          - name: JAVA_OPTIONS
+            value: -Dscouter.config=/deployments/rockpm/scouter.conf -javaagent:/deployments/rockpm/scouter.agent.jar
+          image: ${APPLICATION_NAME}
+          
+$ oc new-app -f openjdk-spring-boot-template.yaml
 ```
